@@ -1,0 +1,102 @@
+{
+  "copper": {
+    "current": 7500,
+    "c1w": 0,
+    "c4w": 0,
+    "ytd": 0,
+    "hist": null,
+    "name": "Copper LME 3M",
+    "unit": "$/t",
+    "estimated": true
+  },
+  "gold": {
+    "current": 1900,
+    "c1w": 0,
+    "c4w": 0,
+    "ytd": 0,
+    "hist": null,
+    "name": "Gold Spot",
+    "unit": "$/oz",
+    "estimated": true
+  },
+  "oil": {
+    "current": 75,
+    "c1w": 0,
+    "c4w": 0,
+    "ytd": 0,
+    "hist": null,
+    "name": "Brent Crude",
+    "unit": "$/bbl",
+    "estimated": true
+  },
+  "natgas": {
+    "current": 2.5,
+    "c1w": 0,
+    "c4w": 0,
+    "ytd": 0,
+    "hist": null,
+    "name": "Natural Gas HH",
+    "unit": "$/MMBtu",
+    "estimated": true
+  },
+  "aluminium": {
+    "current": 2500,
+    "c1w": 0,
+    "c4w": 0,
+    "ytd": 0,
+    "hist": null,
+    "name": "Aluminium LME",
+    "unit": "$/t",
+    "estimated": true
+  },
+  "nickel": {
+    "current": 17000,
+    "c1w": 0,
+    "c4w": 0,
+    "ytd": 0,
+    "hist": null,
+    "name": "Nickel LME",
+    "unit": "$/t",
+    "estimated": true
+  },
+  "iron_ore": {
+    "current": 115,
+    "c1w": 0,
+    "c4w": 0,
+    "ytd": 0,
+    "hist": null,
+    "name": "Iron Ore 62% Fe",
+    "unit": "$/dmt",
+    "estimated": true
+  },
+  "lithium": {
+    "current": 14000,
+    "c1w": 0,
+    "c4w": 0,
+    "ytd": 0,
+    "hist": null,
+    "name": "Lithium Carbonate",
+    "unit": "$/t",
+    "estimated": true
+  },
+  "met_coal": {
+    "current": 200,
+    "c1w": 0,
+    "c4w": 0,
+    "ytd": 0,
+    "hist": null,
+    "name": "Met Coal HCC",
+    "unit": "$/t",
+    "estimated": true
+  },
+  "cobalt": {
+    "current": 30000,
+    "c1w": 0,
+    "c4w": 0,
+    "ytd": 0,
+    "hist": null,
+    "name": "Cobalt Standard",
+    "unit": "$/t",
+    "estimated": true
+  }
+}
