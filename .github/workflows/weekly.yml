@@ -1,0 +1,42 @@
+name: Plavena Weekly Brief
+
+on:
+  schedule:
+    # Every Monday at 02:30 UTC = 08:00 IST
+    - cron: '30 2 * * 1'
+  workflow_dispatch:   # Also allows manual trigger from GitHub
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write   # Needed to commit the generated report
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate report
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SENDER_EMAIL:      ${{ secrets.SENDER_EMAIL }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          SUBSCRIBER_EMAILS: ${{ secrets.SUBSCRIBER_EMAILS }}
+        run: python generate.py
+
+      - name: Commit generated report
+        run: |
+          git config user.name  "Plavena Bot"
+          git config user.email "bot@plavena.com"
+          git add output/ docs/ data/
+          git diff --cached --quiet || git commit -m "Weekly Brief auto-generated $(date +%Y-W%V)"
+          git push

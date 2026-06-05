@@ -1,0 +1,4 @@
+{
+  "_comment": "Add your real deals here. Claude uses these instead of generating fake ones. Leave queue empty [] to let Claude generate deals from market conditions.",
+  "queue": []
+}
