@@ -374,12 +374,13 @@ RULES — follow exactly:
 • Return ONLY the JSON object"""
 
     msg = client.messages.create(
-        model="claude-opus-4-8",
-        max_tokens=12000,
+        model="claude-fable-5",
+        max_tokens=16000,
+        thinking={"type": "adaptive"},
         messages=[{"role": "user", "content": prompt}]
     )
 
-    txt = msg.content[0].text.strip()
+    txt = next((b.text for b in msg.content if b.type == "text"), "").strip()
     if txt.startswith("```"):
         txt = re.sub(r"^```[a-z]*\n?", "", txt)
         txt = re.sub(r"\n?```$", "", txt)
