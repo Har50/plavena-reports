@@ -50,28 +50,34 @@ MANUAL_METALS = {
 
 
 def _yf_fetch(ticker):
+    """Fetch weekly closes via Ticker.history (avoids the yfinance>=0.2.40
+    multi-index column bug that silently broke single-ticker yf.download calls
+    and made every price fall back to a hardcoded estimate)."""
     try:
-        df = yf.download(ticker, period="7mo", interval="1wk",
-                         progress=False, auto_adjust=True)["Close"].dropna()
-        if len(df) < 5:
+        hist_df = yf.Ticker(ticker).history(
+            period="1y", interval="1wk", auto_adjust=True
+        )
+        if hist_df.empty or "Close" not in hist_df.columns:
             return None
-        cur = float(df.iloc[-1])
-        w1  = float(df.iloc[-2])
-        w4  = float(df.iloc[-5])
+        closes = hist_df["Close"].dropna()
+        if len(closes) < 5:
+            return None
 
+        cur = float(closes.iloc[-1])
+        w1  = float(closes.iloc[-2])
+        w4  = float(closes.iloc[-5])
+
+        # YTD baseline = first weekly close of the current calendar year
         yr = datetime.date.today().year
-        s = datetime.date(yr, 1, 1)
-        ytd_df = yf.download(ticker, start=s.isoformat(),
-                             end=(s + datetime.timedelta(days=14)).isoformat(),
-                             interval="1d", progress=False, auto_adjust=True)["Close"].dropna()
-        ytd = float(ytd_df.iloc[0]) if not ytd_df.empty else cur
+        ytd_series = closes[closes.index.year == yr]
+        ytd = float(ytd_series.iloc[0]) if not ytd_series.empty else cur
 
         return {
             "current": round(cur, 2),
-            "c1w": round((cur - w1) / w1 * 100, 2),
-            "c4w": round((cur - w4) / w4 * 100, 2),
-            "ytd": round((cur - ytd) / ytd * 100, 2),
-            "hist": [round(float(x), 2) for x in df.tail(26).tolist()],
+            "c1w": round((cur - w1) / w1 * 100, 2) if w1 else 0,
+            "c4w": round((cur - w4) / w4 * 100, 2) if w4 else 0,
+            "ytd": round((cur - ytd) / ytd * 100, 2) if ytd else 0,
+            "hist": [round(float(x), 2) for x in closes.tail(26).tolist()],
         }
     except Exception as e:
         print(f"  [yfinance] {ticker}: {e}")
@@ -250,6 +256,63 @@ def _price_block(prices):
     return "\n".join(lines)
 
 
+# Canonical 8 commodities shown in the Prices & Signals table, in display order.
+TABLE_SPEC = [
+    ("copper",    "Copper LME 3M",     "$/t"),
+    ("aluminium", "Aluminium LME",     "$/t"),
+    ("nickel",    "Nickel LME",        "$/t"),
+    ("iron_ore",  "Iron Ore 62% Fe",   "$/dmt"),
+    ("lithium",   "Lithium Carbonate", "$/t"),
+    ("cobalt",    "Cobalt Standard",   "$/t"),
+    ("met_coal",  "Met Coal HCC",      "$/t"),
+    ("oil",       "Brent Crude",       "$/bbl"),
+]
+
+
+def _fmt_spot(cur, estimated):
+    if cur is None:
+        return "—"
+    if cur >= 1000:
+        s = f"{cur:,.0f}"
+    elif cur >= 100:
+        s = f"{cur:,.1f}"
+    else:
+        s = f"{cur:,.2f}"
+    return s + ("<sup>e</sup>" if estimated else "")
+
+
+def _fmt_delta(v, estimated):
+    """Return (display, is_positive). Estimated/missing data shows an em dash
+    instead of a fabricated percentage change."""
+    if estimated or v is None:
+        return "—", True
+    return f"{v:+.1f}%", (v >= 0)
+
+
+def assemble_price_table(prices, prices_view):
+    """Build the 8-row price table from VERIFIED data only. The model supplies
+    just the vs-forecast call (vf) and view per row — never the numbers."""
+    rows = []
+    for i, (key, dname, dunit) in enumerate(TABLE_SPEC):
+        p = prices.get(key, {})
+        est = bool(p.get("estimated")) or p.get("hist") is None
+        w1, w1p = _fmt_delta(p.get("c1w"), est)
+        w4, w4p = _fmt_delta(p.get("c4w"), est)
+        ytd, ytdp = _fmt_delta(p.get("ytd"), est)
+        v = prices_view[i] if i < len(prices_view) else {}
+        rows.append({
+            "commodity": p.get("name", dname),
+            "unit": p.get("unit", dunit),
+            "spot": _fmt_spot(p.get("current"), est),
+            "w1": w1, "w1p": w1p,
+            "w4": w4, "w4p": w4p,
+            "ytd": ytd, "ytdp": ytdp,
+            "vf": v.get("vf", "—"), "vfp": bool(v.get("vfp", True)),
+            "view": v.get("view", "hold"),
+        })
+    return rows
+
+
 def generate_content(prices, wn, yr, date_range, next_days, deals_queue):
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
@@ -299,15 +362,15 @@ Return ONLY a valid JSON object — no markdown, no code fences, no extra text:
   "ctx_right": "~100-word paragraph opening with <strong>The implication.</strong> Ends referencing Plavena Trading Prospects p.9.",
   "callout_label": "Why this matters for India &amp; Asia",
   "callout_quote": "1-2 sentence italic insight for Indian and Asian buyers.",
-  "prices_table": [
-    {{"commodity":"Copper LME 3M","unit":"$/t","spot":"9,840","w1":"+0.8%","w1p":true,"w4":"+3.2%","w4p":true,"ytd":"+11.2%","ytdp":true,"vf":"+4.3%","vfp":true,"view":"hold"}},
-    {{"commodity":"Aluminium LME","unit":"$/t","spot":"2,615","w1":"—","w1p":true,"w4":"—","w4p":true,"ytd":"+8.6%","ytdp":true,"vf":"+1.2%","vfp":true,"view":"hold"}},
-    {{"commodity":"Nickel LME","unit":"$/t","spot":"16,250","w1":"—","w1p":false,"w4":"—","w4p":false,"ytd":"-7.4%","ytdp":false,"vf":"-3.1%","vfp":false,"view":"avoid"}},
-    {{"commodity":"Iron Ore 62% Fe","unit":"$/dmt","spot":"108.40","w1":"—","w1p":false,"w4":"—","w4p":false,"ytd":"-13.1%","ytdp":false,"vf":"-8.2%","vfp":false,"view":"watch"}},
-    {{"commodity":"Lithium Carbonate","unit":"$/t","spot":"13,400","w1":"—","w1p":false,"w4":"—","w4p":false,"ytd":"-11.0%","ytdp":false,"vf":"-15.2%","vfp":false,"view":"watch"}},
-    {{"commodity":"Cobalt Standard","unit":"$/t","spot":"29,800","w1":"—","w1p":true,"w4":"—","w4p":true,"ytd":"+6.1%","ytdp":true,"vf":"+2.0%","vfp":true,"view":"hold"}},
-    {{"commodity":"Met Coal HCC","unit":"$/t","spot":"192","w1":"—","w1p":false,"w4":"—","w4p":false,"ytd":"-9.8%","ytdp":false,"vf":"-4.5%","vfp":false,"view":"hold"}},
-    {{"commodity":"Brent Crude","unit":"$/bbl","spot":"79.20","w1":"+1.1%","w1p":true,"w4":"-0.8%","w4p":false,"ytd":"-3.5%","ytdp":false,"vf":"+1.1%","vfp":true,"view":"hold"}}
+  "prices_view": [
+    {{"vf":"+4.3%","vfp":true,"view":"hold"}},
+    {{"vf":"+1.2%","vfp":true,"view":"hold"}},
+    {{"vf":"-3.1%","vfp":false,"view":"avoid"}},
+    {{"vf":"-8.2%","vfp":false,"view":"watch"}},
+    {{"vf":"-15.2%","vfp":false,"view":"watch"}},
+    {{"vf":"+2.0%","vfp":true,"view":"hold"}},
+    {{"vf":"-4.5%","vfp":false,"view":"hold"}},
+    {{"vf":"+1.1%","vfp":true,"view":"hold"}}
   ],
   "sm": [
     {{"name":"Copper · LME","change":"+11.2% YTD","pos":true,"call":"BUY · W08","call_note":"5y avg $8,400 · breakout intact"}},
@@ -365,7 +428,8 @@ Return ONLY a valid JSON object — no markdown, no code fences, no extra text:
 }}
 
 RULES — follow exactly:
-• All 8 prices_table rows must use actual live data above
+• prices_view: EXACTLY 8 entries, in this order — Copper, Aluminium, Nickel, Iron Ore, Lithium, Cobalt, Met Coal, Brent Crude. Each holds only your vs-forecast call (vf, vfp) and view. Do NOT output spot prices or % changes in prices_view — the system fills spot/1W/4W/YTD from verified live data.
+• Never invent a spot price or weekly / 4-week / YTD change anywhere. If you cite a price in narrative, use the LIVE DATA block above verbatim.
 • Exactly 10 watchlist entries — mix all 4 view types
 • Exactly 4 deals — use deals_queue entries if provided, else generate
 • Exactly 5 calendar days, at least 3 real upcoming macro/corporate events
@@ -521,7 +585,7 @@ def _page_prices(c, wn, yr, mon, sun):
 <section class="page">
   {head}
   <h2 class="section">Prices &amp; Signals</h2>
-  <p class="meta-row" style="margin-top:2mm;margin-bottom:8mm;">Spot prices · Data cut-off {cut}, 17:30 IST · Source: LME, SHFE, Fastmarkets, Plavena composite</p>
+  <p class="meta-row" style="margin-top:2mm;margin-bottom:8mm;">Spot prices · Data cut-off {cut}, 17:30 IST · Live: Copper, Brent (Yahoo Finance) · <sup>e</sup> = Plavena estimate · LME / SHFE / Fastmarkets composite</p>
   <table class="price-table">
     <thead><tr>
       <th>Commodity</th><th>Unit</th><th>Spot</th>
@@ -924,9 +988,15 @@ def send_emails(c, wn, yr, report_url):
 # ══════════════════════════════════════════════════════════════
 
 def main():
+    dry_run = ("--dry-run" in sys.argv) or (
+        os.environ.get("PLAVENA_DRY_RUN", "").strip().lower() in ("1", "true", "yes", "on")
+    )
+
     wn, yr, date_range, mon, sun, next_days = week_info()
     print(f"\n{'═'*56}")
     print(f"  Plavena Weekly Brief — W{wn}/{yr} ({date_range})")
+    if dry_run:
+        print("  DRY RUN — no emails sent, docs/ untouched, writes output/ only")
     print(f"{'═'*56}\n")
 
     # Deals queue
@@ -946,24 +1016,32 @@ def main():
     print("\n[2/4] Generating report content via Claude API...")
     content = generate_content(prices, wn, yr, date_range, next_days, deals_queue)
 
+    # Overwrite the price table with verified live data — the model only supplies
+    # the vs-forecast call + view; spot / 1W / 4W / YTD always come from real prices.
+    content["prices_table"] = assemble_price_table(prices, content.get("prices_view", []))
+
     # Build HTML
     print("\n[3/4] Building HTML report...")
     html = build_html(content, prices, wn, yr, date_range, mon, sun)
 
     # Save
     os.makedirs("output", exist_ok=True)
-    os.makedirs("docs", exist_ok=True)
 
     fname = f"plavena-w{wn:02d}-{yr}.html"
-    for path in [f"output/{fname}", f"docs/{fname}"]:
+    targets = [f"output/{fname}"]
+    if not dry_run:                       # dry runs never touch the published docs/
+        os.makedirs("docs", exist_ok=True)
+        targets.append(f"docs/{fname}")
+    for path in targets:
         with open(path, "w", encoding="utf-8") as f:
             f.write(html)
 
-    # GitHub Pages redirect index
-    with open("docs/index.html", "w") as f:
-        f.write(f'<meta http-equiv="refresh" content="0; url={fname}">')
+    # GitHub Pages redirect index (live runs only)
+    if not dry_run:
+        with open("docs/index.html", "w") as f:
+            f.write(f'<meta http-equiv="refresh" content="0; url={fname}">')
 
-    print(f"  Saved: output/{fname}")
+    print(f"  Saved: {', '.join(targets)}")
 
     # Report URL
     repo_owner = os.environ.get("GITHUB_REPOSITORY_OWNER", "your-github-username")
@@ -971,9 +1049,12 @@ def main():
     report_url = f"https://{repo_owner}.github.io/{repo_name}/{fname}"
     print(f"  URL: {report_url}")
 
-    # Send emails
-    print("\n[4/4] Sending emails...")
-    send_emails(content, wn, yr, report_url)
+    # Send emails (skipped on dry runs)
+    if dry_run:
+        print("\n[4/4] DRY RUN — skipping email send (0 subscribers contacted).")
+    else:
+        print("\n[4/4] Sending emails...")
+        send_emails(content, wn, yr, report_url)
 
     print(f"\n✓ Done.\n")
 
