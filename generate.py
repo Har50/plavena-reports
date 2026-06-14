@@ -438,7 +438,7 @@ RULES — follow exactly:
 • Return ONLY the JSON object"""
 
     msg = client.messages.create(
-        model="claude-fable-5",
+        model="claude-opus-4-8",
         max_tokens=16000,
         thinking={"type": "adaptive"},
         messages=[{"role": "user", "content": prompt}]
