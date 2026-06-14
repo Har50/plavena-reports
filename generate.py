@@ -10,7 +10,6 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 import anthropic
-import yfinance as yf
 import requests
 
 # ══════════════════════════════════════════════════════════════
@@ -32,55 +31,76 @@ def week_info():
 # 2. PRICE FETCHING
 # ══════════════════════════════════════════════════════════════
 
-YF_MAP = {
-    "copper":  ("HG=F",  "Copper LME 3M",   "$/t",    7500),
-    "gold":    ("GC=F",  "Gold Spot",         "$/oz",   1900),
-    "oil":     ("BZ=F",  "Brent Crude",       "$/bbl",  75),
-    "natgas":  ("NG=F",  "Natural Gas HH",    "$/MMBtu", 2.5),
+# Live data via FRED (St. Louis Fed) — no API key, reachable from cloud CI.
+# (Yahoo Finance blocks datacenter IPs; Stooq now gates with a bot challenge.)
+# Tuple: (FRED series id, display name, unit, fallback default, monthly?)
+FRED_MAP = {
+    "oil":       ("DCOILBRENTEU", "Brent Crude",     "$/bbl", 75,    False),
+    "copper":    ("PCOPPUSDM",    "Copper LME 3M",   "$/t",   9200,  True),
+    "aluminium": ("PALUMUSDM",    "Aluminium LME",   "$/t",   2400,  True),
+    "nickel":    ("PNICKUSDM",    "Nickel LME",      "$/t",   16000, True),
+    "iron_ore":  ("PIORECRUSDM",  "Iron Ore 62% Fe", "$/dmt", 105,   True),
 }
 
-MANUAL_METALS = {
-    "aluminium": ("Aluminium LME",     "$/t",   2500),
-    "nickel":    ("Nickel LME",        "$/t",   17000),
-    "iron_ore":  ("Iron Ore 62% Fe",   "$/dmt", 115),
-    "lithium":   ("Lithium Carbonate", "$/t",   14000),
-    "met_coal":  ("Met Coal HCC",      "$/t",   200),
-    "cobalt":    ("Cobalt Standard",   "$/t",   30000),
+# No reliable free source — shown as clearly-marked Plavena estimates.
+ESTIMATE_ONLY = {
+    "lithium":  ("Lithium Carbonate", "$/t", 14000),
+    "cobalt":   ("Cobalt Standard",   "$/t", 30000),
+    "met_coal": ("Met Coal HCC",      "$/t", 200),
 }
 
 
-def _yf_fetch(ticker):
-    """Fetch weekly closes via Ticker.history (avoids the yfinance>=0.2.40
-    multi-index column bug that silently broke single-ticker yf.download calls
-    and made every price fall back to a hardcoded estimate)."""
+def _fred_fetch(series, monthly=False):
+    """Fetch a price series from FRED's keyless CSV endpoint. Daily series
+    (e.g. Brent) yield real 1W/4W/YTD; monthly benchmark series (LME metals,
+    iron ore) yield month-over-month + YTD, with 1W left blank."""
     try:
-        hist_df = yf.Ticker(ticker).history(
-            period="1y", interval="1wk", auto_adjust=True
-        )
-        if hist_df.empty or "Close" not in hist_df.columns:
+        end = datetime.date.today()
+        start = end - datetime.timedelta(days=430)
+        url = (f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}"
+               f"&cosd={start.isoformat()}&coed={end.isoformat()}")
+        r = requests.get(url, timeout=30,
+                         headers={"User-Agent": "Mozilla/5.0 (Plavena report bot)"})
+        r.raise_for_status()
+
+        rows = []
+        for line in r.text.splitlines()[1:]:          # skip header row
+            parts = line.split(",")
+            if len(parts) < 2:
+                continue
+            d, v = parts[0].strip(), parts[-1].strip()
+            if v in ("", "."):                         # FRED marks gaps with "."
+                continue
+            try:
+                rows.append((d, float(v)))
+            except ValueError:
+                continue
+        if len(rows) < 3:
             return None
-        closes = hist_df["Close"].dropna()
-        if len(closes) < 5:
-            return None
+        rows.sort(key=lambda x: x[0])
+        closes = [c for _, c in rows]
+        cur = closes[-1]
 
-        cur = float(closes.iloc[-1])
-        w1  = float(closes.iloc[-2])
-        w4  = float(closes.iloc[-5])
+        yr = str(datetime.date.today().year)
+        ytd = next((c for d, c in rows if d[:4] == yr), closes[0])
+        ytd_pct = round((cur - ytd) / ytd * 100, 2) if ytd else None
 
-        # YTD baseline = first weekly close of the current calendar year
-        yr = datetime.date.today().year
-        ytd_series = closes[closes.index.year == yr]
-        ytd = float(ytd_series.iloc[0]) if not ytd_series.empty else cur
+        if monthly:
+            prev = closes[-2] if len(closes) >= 2 else cur
+            c1w = None
+            c4w = round((cur - prev) / prev * 100, 2) if prev else None
+            hist = [round(x, 2) for x in closes[-26:]]
+        else:
+            w1 = closes[-6]  if len(closes) >= 6  else closes[0]
+            w4 = closes[-21] if len(closes) >= 21 else closes[0]
+            c1w = round((cur - w1) / w1 * 100, 2) if w1 else None
+            c4w = round((cur - w4) / w4 * 100, 2) if w4 else None
+            hist = [round(x, 2) for x in closes[::5][-26:]]
 
-        return {
-            "current": round(cur, 2),
-            "c1w": round((cur - w1) / w1 * 100, 2) if w1 else 0,
-            "c4w": round((cur - w4) / w4 * 100, 2) if w4 else 0,
-            "ytd": round((cur - ytd) / ytd * 100, 2) if ytd else 0,
-            "hist": [round(float(x), 2) for x in closes.tail(26).tolist()],
-        }
+        return {"current": round(cur, 2), "c1w": c1w, "c4w": c4w,
+                "ytd": ytd_pct, "hist": hist}
     except Exception as e:
-        print(f"  [yfinance] {ticker}: {e}")
+        print(f"  [fred] {series}: {e}")
         return None
 
 
@@ -102,28 +122,32 @@ def fetch_prices():
     cache = load_cache()
     prices = {}
 
-    for key, (ticker, name, unit, default) in YF_MAP.items():
+    for key, (series, name, unit, default, monthly) in FRED_MAP.items():
         print(f"  {name}...")
-        d = _yf_fetch(ticker)
+        d = _fred_fetch(series, monthly)
         if d:
             d.update({"name": name, "unit": unit})
             prices[key] = d
         else:
-            prices[key] = cache.get(key) or {
-                "current": default, "c1w": 0, "c4w": 0, "ytd": 0, "hist": None,
-                "name": name, "unit": unit, "estimated": True,
-            }
+            cached = cache.get(key)
+            if cached and not cached.get("estimated"):   # reuse last good live value
+                cached.update({"name": name, "unit": unit})
+                prices[key] = cached
+            else:
+                prices[key] = {
+                    "current": default, "c1w": None, "c4w": None, "ytd": None,
+                    "hist": None, "name": name, "unit": unit, "estimated": True,
+                }
 
-    for key, (name, unit, default) in MANUAL_METALS.items():
-        c = cache.get(key)
-        if c:
-            prices[key] = c
-            prices[key]["name"] = name
-            prices[key]["unit"] = unit
+    for key, (name, unit, default) in ESTIMATE_ONLY.items():
+        cached = cache.get(key)
+        if cached and not cached.get("estimated"):
+            cached.update({"name": name, "unit": unit})
+            prices[key] = cached
         else:
             prices[key] = {
-                "current": default, "c1w": 0, "c4w": 0, "ytd": 0, "hist": None,
-                "name": name, "unit": unit, "estimated": True,
+                "current": default, "c1w": None, "c4w": None, "ytd": None,
+                "hist": None, "name": name, "unit": unit, "estimated": True,
             }
 
     save_cache(prices)
@@ -249,7 +273,7 @@ def _price_block(prices):
             est = " [estimated/cached]" if p.get("estimated") else ""
             lines.append(
                 f"  {p['name']:28s} {p['current']:>12.2f} {p['unit']:8s}"
-                f"  1W: {p.get('c1w',0):+.1f}%  4W: {p.get('c4w',0):+.1f}%  YTD: {p.get('ytd',0):+.1f}%{est}"
+                f"  1W: {(p.get('c1w') or 0):+.1f}%  4W: {(p.get('c4w') or 0):+.1f}%  YTD: {(p.get('ytd') or 0):+.1f}%{est}"
             )
         else:
             lines.append(f"  {p.get('name','?'):28s} [unavailable — estimate from knowledge]")
@@ -585,7 +609,7 @@ def _page_prices(c, wn, yr, mon, sun):
 <section class="page">
   {head}
   <h2 class="section">Prices &amp; Signals</h2>
-  <p class="meta-row" style="margin-top:2mm;margin-bottom:8mm;">Spot prices · Data cut-off {cut}, 17:30 IST · Live: Copper, Brent (Yahoo Finance) · <sup>e</sup> = Plavena estimate · LME / SHFE / Fastmarkets composite</p>
+  <p class="meta-row" style="margin-top:2mm;margin-bottom:8mm;">Brent: daily · Copper / Aluminium / Nickel / Iron Ore: monthly LME &amp; global benchmarks (FRED) · Data through {cut} · <sup>e</sup> = Plavena estimate, not a live tick</p>
   <table class="price-table">
     <thead><tr>
       <th>Commodity</th><th>Unit</th><th>Spot</th>
