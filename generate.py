@@ -9,8 +9,9 @@ import os, sys, json, re, math, datetime, smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-import anthropic
 import requests
+# `anthropic` is imported lazily inside generate_content() so data-only paths
+# (e.g. `--signals-only`) run without the SDK installed.
 
 # ══════════════════════════════════════════════════════════════
 # 1. DATE / WEEK HELPERS
@@ -152,6 +153,75 @@ def fetch_prices():
 
     save_cache(prices)
     return prices
+
+
+# ══════════════════════════════════════════════════════════════
+# 2b. PUBLIC SIGNALS FEED  (homepage live-sync)
+# ══════════════════════════════════════════════════════════════
+# generate.py publishes docs/signals.json each live run; the plavena.com
+# homepage loads docs/plavena-signals.js which fetches it and renders the
+# LIVE SIGNALS panel + ticker. Cross-origin fetch works because GitHub Pages
+# serves assets with CORS "*". This keeps the marketing site in lock-step
+# with the report — "LIVE" is finally true and the week label auto-advances.
+
+SIGNALS_SHORT = {
+    "copper": "COPPER", "oil": "BRENT", "iron_ore": "IRON ORE",
+    "aluminium": "ALUMINIUM", "nickel": "NICKEL", "met_coal": "COAL MET",
+    "lithium": "LITHIUM", "cobalt": "COBALT",
+}
+
+
+def _signal_spot_fmt(cur, estimated):
+    """Compact homepage price string: '$13,484', '$84.36', '~$14,000'."""
+    if cur is None:
+        return "—"
+    if cur >= 1000:
+        s = f"{cur:,.0f}"
+    elif cur >= 100:
+        s = f"{cur:,.1f}"
+    else:
+        s = f"{cur:,.2f}"
+    if s.endswith(".0"):          # '200.0' -> '200'
+        s = s[:-2]
+    return ("~$" if estimated else "$") + s
+
+
+def write_signals_json(prices, wn, yr, date_range, report_url, path="docs/signals.json"):
+    """Publish a small public JSON feed of the latest signals so the homepage
+    always matches the current report. Returns the path written."""
+    commodities = {}
+    for key, p in prices.items():
+        est = bool(p.get("estimated")) or p.get("hist") is None
+        commodities[key] = {
+            "name": p.get("name"),
+            "short": SIGNALS_SHORT.get(key, key.upper()),
+            "unit": p.get("unit"),
+            "spot": p.get("current"),
+            "spot_fmt": _signal_spot_fmt(p.get("current"), est),
+            "c1w": p.get("c1w"),
+            "c4w": p.get("c4w"),
+            "ytd": p.get("ytd"),
+            "estimated": est,
+            "hist": p.get("hist"),
+        }
+    feed = {
+        "week": wn,
+        "year": yr,
+        "date_range": date_range,
+        "updated_utc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "report_url": report_url,
+        "commodities": commodities,
+    }
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(feed, f, indent=2)
+    return path
+
+
+def _report_url_for(wn, yr):
+    owner = os.environ.get("GITHUB_REPOSITORY_OWNER", "har50").lower()
+    repo  = os.environ.get("GITHUB_REPOSITORY", f"{owner}/plavena-reports").split("/")[-1]
+    return f"https://{owner}.github.io/{repo}/plavena-w{wn:02d}-{yr}.html"
 
 
 # ══════════════════════════════════════════════════════════════
@@ -338,6 +408,7 @@ def assemble_price_table(prices, prices_view):
 
 
 def generate_content(prices, wn, yr, date_range, next_days, deals_queue):
+    import anthropic
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
     cal_dates  = [d.strftime("%a %d") for d in next_days]
@@ -1012,11 +1083,22 @@ def send_emails(c, wn, yr, report_url):
 # ══════════════════════════════════════════════════════════════
 
 def main():
+    wn, yr, date_range, mon, sun, next_days = week_info()
+
+    # Signals-only: refresh docs/signals.json from the cached prices and exit.
+    # No API call, no email — used to (re)publish the homepage feed on demand.
+    if "--signals-only" in sys.argv:
+        prices = load_cache()
+        if not prices:
+            print("  No data/price_cache.json — run a normal generate first."); return
+        path = write_signals_json(prices, wn, yr, date_range, _report_url_for(wn, yr))
+        print(f"  Signals feed written: {path}  (W{wn}/{yr})")
+        return
+
     dry_run = ("--dry-run" in sys.argv) or (
         os.environ.get("PLAVENA_DRY_RUN", "").strip().lower() in ("1", "true", "yes", "on")
     )
 
-    wn, yr, date_range, mon, sun, next_days = week_info()
     print(f"\n{'═'*56}")
     print(f"  Plavena Weekly Brief — W{wn}/{yr} ({date_range})")
     if dry_run:
@@ -1068,10 +1150,14 @@ def main():
     print(f"  Saved: {', '.join(targets)}")
 
     # Report URL
-    repo_owner = os.environ.get("GITHUB_REPOSITORY_OWNER", "your-github-username")
-    repo_name  = os.environ.get("GITHUB_REPOSITORY", f"{repo_owner}/plavena-reports").split("/")[-1]
-    report_url = f"https://{repo_owner}.github.io/{repo_name}/{fname}"
+    report_url = _report_url_for(wn, yr)
     print(f"  URL: {report_url}")
+
+    # Publish the public signals feed for the homepage (live runs only; the
+    # workflow's `git add docs/` then commits + pushes it automatically).
+    if not dry_run:
+        sp = write_signals_json(prices, wn, yr, date_range, report_url)
+        print(f"  Signals feed: {sp}")
 
     # Send emails (skipped on dry runs)
     if dry_run:
