@@ -761,7 +761,7 @@ def _page_dd1(c, prices, wn, yr):
   <div class="exhibit">
     <div class="ex-head"><div class="ex-num">Exhibit 02</div><div class="ex-title">{c.get("dd_ex2_title","")}</div></div>
     <div class="ex-frame">{ex2}
-      <div class="ex-source">Source: LME, SHFE, Fastmarkets, Plavena composite · Weekly closes</div>
+      <div class="ex-source">Source: LME &amp; global benchmarks, Brent, Plavena composite · Weekly closes</div>
     </div>
   </div>
   <p style="margin-top:3mm;font-size:10.5pt;line-height:1.55;">{c.get("dd_ex2_caption","")}</p>
@@ -941,7 +941,7 @@ def _page_lookahead(c, wn, yr):
   <div class="meth-grid" style="margin-top:6mm;">
     <div>
       <h4 class="label">Methodology</h4>
-      <p>Plavena compiles weekly price data from LME official settlements, SHFE closing prices, Fastmarkets spot assessments, and Freightos Baltic container indices. Analysis layers Plavena's proprietary deal-flow intelligence and counterparty network data. All calls are tracked and audited weekly.</p>
+      <p>Plavena compiles weekly prices from LME and global benchmark settlements and the Brent crude benchmark, layered with Plavena's proprietary deal-flow and counterparty intelligence. Every call is dated and kept on the permanent record — we don't revise a call after it's published.</p>
     </div>
     <div>
       <h4 class="label">Disclaimer</h4>
