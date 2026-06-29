@@ -1052,9 +1052,13 @@ def _page_lookahead(c, wn, yr):
       <p>Plavena compiles weekly prices from LME and global benchmark settlements and the Brent crude benchmark, layered with Plavena's proprietary deal-flow and counterparty intelligence. Every call is dated and kept on the permanent record — we don't revise a call after it's published.</p>
     </div>
     <div>
-      <h4 class="label">Disclaimer</h4>
-      <p>This report is for professional subscribers only. Nothing herein constitutes financial advice. Commodity markets carry material risk. Past call performance does not guarantee future results. Plavena may hold positions in instruments discussed. Not for redistribution.</p>
+      <h4 class="label">Data &amp; estimates</h4>
+      <p>Prices are drawn from third-party public benchmarks (LME &amp; global benchmark settlements and Brent, via the U.S. Federal Reserve / FRED). Figures marked &ldquo;e&rdquo; are Plavena estimates pending a verified feed. Benchmark series may update monthly; the weekly column shows &ldquo;—&rdquo; between updates. Data may be delayed or indicative and can differ from live exchange prices.</p>
     </div>
+  </div>
+  <div class="meth" style="margin-top:5mm;">
+    <h4 class="label">Important disclaimer</h4>
+    <p style="font-size:7.6pt;line-height:1.42;">The Plavena Weekly Brief is market commentary for professional, business and institutional users only and is not intended for retail investors. It is provided for information purposes only and is <b>not investment, financial, trading, tax or legal advice</b>, nor an offer, solicitation or recommendation to buy, sell or hold any commodity, security, derivative or other instrument. Plavena is not a registered investment adviser or research analyst, and nothing here creates an advisory or fiduciary relationship. Prices are sourced from third-party public benchmarks and are provided &ldquo;as is&rdquo; without warranty of accuracy, completeness or timeliness; figures marked &ldquo;e&rdquo; are estimates. All views, calls, forecasts and outlooks are opinions as of the publication date, are subject to change without notice, and are <b>not guarantees</b> — past performance does not indicate future results, and commodity markets carry material risk of loss. Any decision or action you take based on this material is at your own risk; obtain independent professional advice before acting. To the fullest extent permitted by law, Plavena and its principals accept no liability for any loss or damage arising from use of, or reliance on, this material, and may hold or transact positions in instruments referenced. This is subscriber content and may not be redistributed. &copy; {yr} Plavena. Full terms, data sources &amp; methodology: <b>plavena.com/terms</b>. Governed by the laws of India.</p>
   </div>
   <div class="signoff">
     <div class="analyst">
