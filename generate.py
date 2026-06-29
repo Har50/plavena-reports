@@ -788,7 +788,7 @@ def _page_prices(c, wn, yr, mon, sun):
 <section class="page">
   {head}
   <h2 class="section">Prices &amp; Signals</h2>
-  <p class="meta-row" style="margin-top:2mm;margin-bottom:8mm;">Brent: daily · Copper / Aluminium / Nickel / Iron Ore: monthly LME &amp; global benchmarks (FRED) · Data through {cut} · <sup>e</sup> = Plavena estimate, not a live tick</p>
+  <p class="meta-row" style="margin-top:2mm;margin-bottom:8mm;">Brent: daily · Copper / Aluminium / Nickel / Iron Ore: monthly LME &amp; global benchmarks · Data through {cut} · <sup>e</sup> = Plavena estimate, not a live tick</p>
   <table class="price-table">
     <thead><tr>
       <th>Commodity</th><th>Unit</th><th>Spot</th>
