@@ -1,0 +1,17 @@
+{
+  "updated_utc": "2026-06-29T21:10:51Z",
+  "rule": "Each directional call is scored 4 weeks out against the real price move. Hold/watch counts correct within \u00b12%; a bullish call needs +2%+, a bearish call \u22122%+. Estimated commodities excluded. Headline = forward (made-in-advance) calls only.",
+  "overall": {
+    "resolved": 0,
+    "hits": 0,
+    "hit_rate": null
+  },
+  "reconstructed": {
+    "resolved": 0,
+    "hits": 0,
+    "hit_rate": null
+  },
+  "by_commodity": {},
+  "open_calls": 15,
+  "resolved_calls": []
+}

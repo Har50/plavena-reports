@@ -225,6 +225,114 @@ def _report_url_for(wn, yr):
 
 
 # ══════════════════════════════════════════════════════════════
+# 2c. CALL TRACKING  (the honest track record)
+# ══════════════════════════════════════════════════════════════
+# Each live run LOGS that week's directional calls stamped with the real spot
+# (data/calls.json, committed = frozen, provably made in advance). Calls whose
+# horizon has elapsed are SCORED against the real price move and aggregated into
+# docs/track-record.json. Only real-priced commodities are tracked (estimates
+# can't be verified). This is what makes a published hit-rate truthful.
+
+CALLS_PATH    = "data/calls.json"
+TRACK_PATH    = "docs/track-record.json"
+HORIZON_WEEKS = 4       # monthly metals need ~a month to move; Brent moves faster
+NEUTRAL_BAND  = 2.0     # % — "hold/watch" is correct if the move stays inside this
+
+VIEW_DIR = {
+    "buy": 1, "accumulate": 1, "add": 1, "overweight": 1, "long": 1,
+    "sell": -1, "avoid": -1, "reduce": -1, "trim": -1, "underweight": -1, "short": -1,
+    "hold": 0, "watch": 0, "neutral": 0, "monitor": 0,
+}
+
+
+def load_calls():
+    try:
+        with open(CALLS_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {"calls": []}
+
+
+def record_calls(prices, table, wn, yr):
+    """Append this week's calls for real-priced commodities, stamped with spot."""
+    log = load_calls()
+    seen = {(c["week"], c["year"], c["key"]) for c in log["calls"]}
+    today = datetime.date.today().isoformat()
+    for i, (key, dname, dunit) in enumerate(TABLE_SPEC):
+        p = prices.get(key, {})
+        if bool(p.get("estimated")) or p.get("hist") is None:
+            continue                                   # estimates aren't scoreable
+        if (wn, yr, key) in seen:
+            continue
+        row = table[i] if i < len(table) else {}
+        log["calls"].append({
+            "week": wn, "year": yr, "date": today, "key": key,
+            "commodity": p.get("name", dname), "view": str(row.get("view", "hold")).lower(),
+            "vf": row.get("vf", "—"), "spot": p.get("current"),
+            "horizon_weeks": HORIZON_WEEKS, "scored": False,
+        })
+    with open(CALLS_PATH, "w") as f:
+        json.dump(log, f, indent=2)
+    return log
+
+
+def score_calls(prices, wn, yr):
+    """Resolve matured calls vs the current real spot; rewrite track-record.json."""
+    log = load_calls()
+    for c in log["calls"]:
+        if c.get("scored"):
+            continue
+        age = (yr - c["year"]) * 52 + (wn - c["week"])
+        if age < c.get("horizon_weeks", HORIZON_WEEKS):
+            continue                                   # not mature yet
+        now = prices.get(c["key"], {}).get("current")
+        then = c.get("spot")
+        if not now or not then:
+            continue
+        move = (now - then) / then * 100.0
+        d = VIEW_DIR.get(c["view"], 0)
+        hit = (move >= NEUTRAL_BAND) if d > 0 else (move <= -NEUTRAL_BAND) if d < 0 else (abs(move) < NEUTRAL_BAND)
+        c.update(scored=True, spot_resolve=round(now, 2), move_pct=round(move, 1),
+                 resolved_week=wn, result="hit" if hit else "miss")
+
+    def agg(lst):
+        h = sum(1 for c in lst if c["result"] == "hit")
+        return {"resolved": len(lst), "hits": h,
+                "hit_rate": round(h / len(lst) * 100, 1) if lst else None}
+
+    scored = [c for c in log["calls"] if c.get("scored")]
+    fwd = [c for c in scored if not c.get("reconstructed")]      # the honest headline
+    rec = [c for c in scored if c.get("reconstructed")]          # backfill, shown apart
+    by = {}
+    for c in fwd:
+        b = by.setdefault(c["key"], {"name": c["commodity"], "resolved": 0, "hits": 0})
+        b["resolved"] += 1
+        b["hits"] += 1 if c["result"] == "hit" else 0
+    track = {
+        "updated_utc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "rule": (f"Each directional call is scored {HORIZON_WEEKS} weeks out against the real "
+                 f"price move. Hold/watch counts correct within ±{NEUTRAL_BAND:.0f}%; a bullish "
+                 f"call needs +{NEUTRAL_BAND:.0f}%+, a bearish call −{NEUTRAL_BAND:.0f}%+. "
+                 f"Estimated commodities excluded. Headline = forward (made-in-advance) calls only."),
+        "overall": agg(fwd),
+        "reconstructed": agg(rec),
+        "by_commodity": {k: {**v, "hit_rate": round(v["hits"] / v["resolved"] * 100, 1) if v["resolved"] else None}
+                         for k, v in by.items()},
+        "open_calls": sum(1 for c in log["calls"] if not c.get("scored")),
+        "resolved_calls": [{**{k: c.get(k) for k in
+                            ("week", "year", "commodity", "view", "spot", "spot_resolve", "move_pct", "result")},
+                            "reconstructed": bool(c.get("reconstructed"))}
+                           for c in scored],
+    }
+    with open(CALLS_PATH, "w") as f:
+        json.dump(log, f, indent=2)
+    os.makedirs("docs", exist_ok=True)
+    with open(TRACK_PATH, "w") as f:
+        json.dump(track, f, indent=2)
+    return track
+
+
+# ══════════════════════════════════════════════════════════════
 # 3. SVG / CHART HELPERS
 # ══════════════════════════════════════════════════════════════
 
@@ -1158,6 +1266,10 @@ def main():
     if not dry_run:
         sp = write_signals_json(prices, wn, yr, date_range, report_url)
         print(f"  Signals feed: {sp}")
+        record_calls(prices, content["prices_table"], wn, yr)
+        track = score_calls(prices, wn, yr)
+        ov = track["overall"]
+        print(f"  Track record: {ov['resolved']} resolved ({ov['hit_rate']}% hit), {track['open_calls']} open")
 
     # Send emails (skipped on dry runs)
     if dry_run:

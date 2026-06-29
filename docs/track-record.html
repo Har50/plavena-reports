@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plavena — Call Track Record</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#080D1A;--card:#0D1B2A;--line:#1B2A3D;--accent:#00B3FF;--pos:#2BD17E;--neg:#FF5A5F;--warn:#F4B740;--tx:#E8EDF4;--tx2:#94A6BC;--tx3:#5B6B7F}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--tx);font-family:'Inter',system-ui,sans-serif;line-height:1.6}
+  .mono{font-family:'IBM Plex Mono',monospace}
+  .wrap{max-width:820px;margin:0 auto;padding:0 22px}
+  .top{display:flex;align-items:center;justify-content:space-between;padding:22px 0;border-bottom:1px solid var(--line)}
+  .brand{font-weight:700;letter-spacing:.18em;font-size:15px}.brand b{color:var(--accent)}
+  .top .tag{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--tx3);letter-spacing:.12em}
+  h1{font-size:30px;font-weight:700;margin:34px 0 6px;letter-spacing:-.01em}
+  .sub{color:var(--tx2);font-size:15px;margin-bottom:26px;max-width:620px}
+  .hero{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:30px;display:flex;align-items:center;gap:30px;flex-wrap:wrap}
+  .big{font-size:54px;font-weight:700;line-height:1}
+  .big small{font-size:18px;color:var(--tx2);font-weight:500}
+  .hero .meta{flex:1;min-width:220px}
+  .hero .meta h3{font-size:16px;font-weight:600;margin-bottom:4px}
+  .hero .meta p{font-size:13.5px;color:var(--tx2)}
+  .lbl{font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--tx2);margin:36px 0 14px;display:flex;align-items:center;gap:9px}
+  .lbl .dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .c{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .c .n{font-size:12px;color:var(--tx3);font-family:'IBM Plex Mono',monospace}
+  .c .v{font-size:22px;font-weight:600;margin-top:6px}
+  .c .s{font-size:12px;color:var(--tx2);margin-top:2px}
+  table{width:100%;border-collapse:collapse;margin-top:6px;font-size:13.5px}
+  th,td{text-align:left;padding:11px 10px;border-bottom:1px solid var(--line)}
+  th{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);font-weight:400}
+  .hit{color:var(--pos)}.miss{color:var(--neg)}.up{color:var(--pos)}.down{color:var(--neg)}
+  .pill{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.06em;padding:2px 8px;border-radius:20px;border:1px solid var(--line);color:var(--tx2)}
+  .empty{background:var(--card);border:1px dashed var(--line);border-radius:12px;padding:26px;text-align:center;color:var(--tx2);font-size:14.5px}
+  .rule{background:rgba(0,179,255,.05);border-left:3px solid var(--accent);border-radius:0;padding:13px 16px;font-size:13px;color:var(--tx2);margin-top:8px}
+  .foot{border-top:1px solid var(--line);margin-top:42px;padding:24px 0 40px;font-size:12px;color:var(--tx3)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><div class="brand"><b>●</b> PLAVENA</div><div class="tag">CALL TRACK RECORD · INTERNAL</div></div>
+
+  <h1>Call track record</h1>
+  <p class="sub">Every weekly directional call, frozen on the date it was made and scored against the real price move on a 4-week horizon. No revisions. Estimated commodities excluded.</p>
+
+  <div class="hero">
+    <div><div id="big" class="big">—</div></div>
+    <div class="meta"><h3 id="hero-h">Loading…</h3><p id="hero-p"></p></div>
+  </div>
+
+  <div class="lbl"><span class="dot"></span> By commodity (forward calls)</div>
+  <div id="by" class="grid"><div class="empty">Nothing resolved yet.</div></div>
+
+  <div class="lbl"><span class="dot"></span> Resolved calls</div>
+  <div id="resolved"></div>
+
+  <div class="lbl"><span class="dot"></span> How it's scored</div>
+  <div id="rule" class="rule"></div>
+
+  <div class="foot">Source: Plavena automated pipeline · prices via FRED (LME &amp; global benchmarks, Brent) · <span id="updated"></span></div>
+</div>
+
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id)};
+  fetch('track-record.json?t='+Date.now(),{cache:'no-cache'}).then(function(r){return r.json()}).then(render).catch(function(){
+    $('hero-h').textContent='Track record not available yet';$('hero-p').textContent='The first scored run will publish it.';
+  });
+
+  function pct(v){return v===null||v===undefined?'—':v+'%'}
+  function render(d){
+    var o=d.overall||{}, rec=d.reconstructed||{};
+    if(o.resolved>0){
+      $('big').innerHTML=o.hit_rate+'<small>%</small>';
+      $('hero-h').textContent=o.hits+' of '+o.resolved+' forward calls correct';
+      $('hero-p').textContent=(d.open_calls||0)+' calls still open · headline counts made-in-advance calls only';
+    } else {
+      $('big').innerHTML='<span style="font-size:30px;color:var(--warn)">Building</span>';
+      $('hero-h').textContent=(d.open_calls||0)+' calls logged & frozen';
+      $('hero-p').textContent='First grades land when the earliest calls mature (4-week horizon) — around W29, mid-July 2026.';
+    }
+    // by commodity
+    var by=d.by_commodity||{}, keys=Object.keys(by);
+    if(keys.length){
+      $('by').innerHTML=keys.map(function(k){var b=by[k];
+        return '<div class="c"><div class="n">'+b.name+'</div><div class="v">'+pct(b.hit_rate)+'</div><div class="s">'+b.hits+'/'+b.resolved+' correct</div></div>';
+      }).join('');
+    } else {
+      $('by').innerHTML='<div class="empty">No forward calls resolved yet — the dashboard fills in as horizons elapse.</div>';
+    }
+    // resolved table
+    var rc=d.resolved_calls||[];
+    if(rc.length){
+      var rows=rc.map(function(c){
+        var mv=(c.move_pct>=0?'+':'')+c.move_pct+'%';
+        return '<tr><td class="mono">W'+c.week+'</td><td>'+c.commodity+'</td><td><span class="pill">'+String(c.view).toUpperCase()+'</span></td>'
+          +'<td class="mono">'+c.spot+' &rarr; '+c.spot_resolve+'</td><td class="'+(c.move_pct>=0?'up':'down')+'">'+mv+'</td>'
+          +'<td class="'+(c.result==='hit'?'hit':'miss')+'">'+(c.result==='hit'?'✓ hit':'✗ miss')+(c.reconstructed?' <span style="color:var(--tx3)">(backfill)</span>':'')+'</td></tr>';
+      }).join('');
+      $('resolved').innerHTML='<table><thead><tr><th>Week</th><th>Commodity</th><th>Call</th><th>Spot → 4wk</th><th>Move</th><th>Result</th></tr></thead><tbody>'+rows+'</tbody></table>';
+    } else {
+      $('resolved').innerHTML='<div class="empty">No calls have matured yet. '+(d.open_calls||0)+' are logged and counting down — first results around mid-July.</div>';
+    }
+    $('rule').textContent=d.rule||'';
+    $('updated').textContent='updated '+(d.updated_utc||'').replace('T',' ').replace('Z',' UTC');
+  }
+})();
+</script>
+</body>
+</html>
