@@ -53,7 +53,18 @@
   .cta{background:linear-gradient(180deg,var(--card),#0a1622); border:1px solid var(--accent); border-radius:16px; padding:34px 30px; margin:30px 0 10px; text-align:center}
   .cta h2{font-size:26px; font-weight:700; margin-bottom:10px}
   .cta p{color:var(--tx2); font-size:15px; max-width:480px; margin:0 auto 22px}
-  #hs-form-target:empty{display:none}
+  #hs-form-target{max-width:470px; margin:0 auto 4px}
+  #hs-form-target form.hs-form{display:flex; flex-wrap:wrap; gap:10px; align-items:flex-start; justify-content:center}
+  #hs-form-target .hs-form-field{flex:1 1 250px; text-align:left; margin:0}
+  #hs-form-target .hs-form-field>label{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
+  #hs-form-target .hs-input{width:100%; background:#0a1622; border:1px solid var(--line); color:var(--tx); padding:13px 14px; border-radius:8px; font-size:15px; font-family:'Inter',sans-serif}
+  #hs-form-target .hs-input::placeholder{color:var(--tx3)}
+  #hs-form-target .hs-input:focus{outline:none; border-color:var(--accent)}
+  #hs-form-target .hs_submit{flex:0 0 auto; margin:0}
+  #hs-form-target .hs-button{background:var(--accent); color:#04111E; font-weight:600; font-size:15px; padding:13px 26px; border:none; border-radius:8px; cursor:pointer; font-family:'Inter',sans-serif}
+  #hs-form-target .hs-button:hover{filter:brightness(1.08)}
+  #hs-form-target .hs-error-msgs{list-style:none; padding:0; margin:6px 0 0; color:var(--neg); font-size:12.5px}
+  #hs-form-target .hs-form-required{color:var(--neg)}
   .btn{display:inline-block; background:var(--accent); color:#04111E; font-weight:600; font-size:16px; padding:14px 30px; border-radius:8px}
   .ctasub{font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--tx3); margin-top:16px; letter-spacing:.08em}
   .foot{border-top:1px solid var(--line); margin-top:46px; padding:26px 0 40px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; font-size:12.5px; color:var(--tx3)}
@@ -109,10 +120,14 @@
   </div>
 
   <div class="cta">
-    <h2>Get the full brief — free this week.</h2>
-    <p>Drop your email and we'll send you this week's complete 10-page brief. Then it lands every Monday morning, ahead of the desk.</p>
+    <h2 id="cta-h">Get the full brief — free this week.</h2>
+    <p id="cta-sub">Drop your email and we'll unlock this week's complete 10-page brief — then it lands every Monday morning, ahead of the desk.</p>
     <div id="hs-form-target"></div>
-    <a class="btn" href="https://www.plavena.com/subscribe">Get the full weekly brief →</a>
+    <div id="cta-success" style="display:none;">
+      <div style="font-size:18px; color:var(--pos); margin-bottom:14px;">✓ You're in — your brief is unlocked.</div>
+      <a class="btn" href="https://har50.github.io/plavena-reports/" target="_blank" rel="noopener">Open the full weekly brief →</a>
+      <div style="margin-top:16px; font-size:13px;"><a href="https://www.plavena.com/subscribe" style="color:var(--accent);">Want it every Monday? Subscribe →</a></div>
+    </div>
     <div class="ctasub">NO SPAM · UNSUBSCRIBE ANY TIME · PLAVENA.COM</div>
   </div>
 
@@ -122,5 +137,25 @@
   </div>
 
 </div>
+
+<script charset="utf-8" type="text/javascript" src="//js-na2.hsforms.net/forms/embed/v2.js"></script>
+<script>
+  hbspt.forms.create({
+    portalId: "246330048",
+    formId: "356611e8-3bbe-4055-abe2-91f229bf8cd9",
+    region: "na2",
+    target: "#hs-form-target",
+    onFormReady: function(){
+      var el = document.querySelector('#hs-form-target input.hs-input');
+      if (el) el.setAttribute('placeholder', 'you@company.com');
+    },
+    onFormSubmitted: function(){
+      var hide = ['hs-form-target','cta-sub'];
+      hide.forEach(function(id){ var e=document.getElementById(id); if(e) e.style.display='none'; });
+      var s=document.getElementById('cta-success'); if(s) s.style.display='block';
+      var h=document.getElementById('cta-h'); if(h) h.textContent='Done — welcome aboard.';
+    }
+  });
+</script>
 </body>
 </html>
