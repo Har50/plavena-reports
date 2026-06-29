@@ -1053,7 +1053,7 @@ def _page_lookahead(c, wn, yr):
     </div>
     <div>
       <h4 class="label">Data &amp; estimates</h4>
-      <p>Prices are drawn from third-party public benchmarks (LME &amp; global benchmark settlements and Brent, via the U.S. Federal Reserve / FRED). Figures marked &ldquo;e&rdquo; are Plavena estimates pending a verified feed. Benchmark series may update monthly; the weekly column shows &ldquo;—&rdquo; between updates. Data may be delayed or indicative and can differ from live exchange prices.</p>
+      <p>Prices are drawn from recognised third-party benchmark sources (LME &amp; global benchmark settlements and Brent). Figures marked &ldquo;e&rdquo; are Plavena estimates. Some benchmark series update periodically; the weekly column shows &ldquo;—&rdquo; between updates. Data may be delayed or indicative and can differ from live exchange prices.</p>
     </div>
   </div>
   <div class="meth" style="margin-top:5mm;">
